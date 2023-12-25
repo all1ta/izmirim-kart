@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="tr" data-bs-theme="dark">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1">
+		<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" crossorigin="anonymous">
+		<title>İzmirim Kart Bakiye Sorgulama</title>
+		<script type="text/javascript">
+		const api_url = 'https://openapi.izmir.bel.tr/api/iztek/bakiyesorgulama/';
+		
+		let cardStorage =  {
+			_key : 'cards',
+			_cards : [],
+			init() {
+				let ls = localStorage.getItem(this._key);
+				this._cards = ls ? JSON.parse(ls) : [];
+				if (this.afterInit)
+					this.afterInit();
+			},
+			save(cards) {
+				localStorage.setItem(this._key, JSON.stringify(cards || this._cards));
+			},
+			add(card) {
+				if (card && !this.exist(card)) {
+					this._cards.push(card);
+					this.save();
+					if(this.onAdd)
+						this.onAdd(card, true);
+					return true;
+				}
+				if(this.onAdd)
+					this.onAdd(card, false);
+				return false;
+			},
+			remove(card, el) {
+				let i = this._cards.indexOf(card);
+				if (i > -1) {
+					this._cards.splice(i, 1);
+					this.save();
+					if(this.onRemove)
+						this.onRemove(card, el);
+				}
+				return i > -1;
+			},
+			exist(card) {
+				return this._cards.filter(x => x.name == card.name && x.card == card.card).length > 0;
+			},
+			getCards() {
+				return this._cards;
+			},
+			addFrom(form) {
+				return this.add({ name: form.querySelector('#name').value, card: form.querySelector('#cardno').value });
+			}
+		};
+
+		cardStorage.afterInit = function() {
+			if (this.getCards().length > 0)
+				document.querySelector("#no-result").classList.add("d-none");
+		}
+
+		cardStorage.onAdd = function(card, success) {
+			if (success) {
+				document.querySelector("#no-result").classList.add("d-none");
+				document.querySelector(".modal-mesaj").innerText = "Kart ekleme başarılı.";
+				yazdir(card);
+			} else {
+				document.querySelector(".modal-mesaj").innerText = "Bu kart daha önce eklendi.";
+			}
+		}
+
+		cardStorage.onRemove = function(card, el) {
+			el.remove();
+			if (this.getCards().length == 0)
+				document.querySelector("#no-result").classList.remove("d-none");
+		}
+
+		let yazdir = async (card) => {
+			let cardFragment = document.querySelector("#card-template").content.cloneNode(true);
+			let cardEl = cardFragment.querySelector(".card");
+			cardEl.querySelector(".kart-ismi").innerText = card.name;
+			cardEl.querySelector(".kart-no").innerText = card.card;
+			cardEl.querySelector(".remove").onclick = () => { return confirm('Emin misiniz?') && cardStorage.remove(card, cardEl); };
+			document.querySelector("#result").appendChild(cardFragment);
+
+			try {
+				let response = await fetch(api_url + card.card);
+				let x = await response.json();
+			
+				if (!x || x.HataVarMi || !x.UlasimKartBakiyesi)
+					throw new Error("HATALI_KART");
+
+				cardEl.querySelector(".bakiye").innerText = `${x.UlasimKartBakiyesi.MevcutBakiye} TL`;
+				cardEl.querySelector(".bekleyen").innerText = `${x.UlasimKartBakiyesi.BekleyenYuklemeler.join(' TL | ') || '0,00'} TL`;
+				cardEl.querySelector(".son-islem").innerText = x.UlasimKartBakiyesi.SonIslemTarihi;
+				cardEl.querySelector(".son-yukleme").innerText = x.UlasimKartBakiyesi.SonYuklemeTarihi;
+				cardEl.querySelector(".kart-bilgisi").classList.remove("d-none");
+				
+			} catch(error) {
+				let hata = cardEl.querySelector(".hata-mesaji");
+				hata.innerText = "Bir hata meydana geldi.";
+				hata.classList.remove("d-none");
+			} finally {
+				cardEl.querySelector(".yukleniyor").classList.add("d-none");
+			}
+		}
+
+		let init = () => {
+			cardStorage.init();
+			cardStorage.getCards().forEach(x => yazdir(x));
+		}
+		</script>
+	</head>
+	<body onload="init()">
+
+		<svg xmlns="http://www.w3.org/2000/svg" class="d-none">
+			<symbol id="twitter" viewBox="0 0 16 16">
+			  <path d="M5.026 15c6.038 0 9.341-5.003 9.341-9.334 0-.14 0-.282-.006-.422A6.685 6.685 0 0 0 16 3.542a6.658 6.658 0 0 1-1.889.518 3.301 3.301 0 0 0 1.447-1.817 6.533 6.533 0 0 1-2.087.793A3.286 3.286 0 0 0 7.875 6.03a9.325 9.325 0 0 1-6.767-3.429 3.289 3.289 0 0 0 1.018 4.382A3.323 3.323 0 0 1 .64 6.575v.045a3.288 3.288 0 0 0 2.632 3.218 3.203 3.203 0 0 1-.865.115 3.23 3.23 0 0 1-.614-.057 3.283 3.283 0 0 0 3.067 2.277A6.588 6.588 0 0 1 .78 13.58a6.32 6.32 0 0 1-.78-.045A9.344 9.344 0 0 0 5.026 15z"/>
+			</symbol>
+			<symbol id="github" viewBox="0 0 16 16">
+				<path fill-rule="evenodd" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"></path>
+			</symbol>
+			<symbol id="mail" viewBox="0 0 8 6">
+				<path d="m0 0h8v6h-8zm.75 .75v4.5h6.5v-4.5zM0 0l4 3 4-3v1l-4 3-4-3z"/>
+			</symbol>
+			<symbol id="trash" viewBox="0 0 16 16">
+				<path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/>
+				<path fill-rule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/>
+			</symbol>
+		</svg>
+
+		<template id="card-template">
+			<div class="card mx-2" style="width: 22rem;">
+				<div class="d-flex justify-content-between border-bottom">
+					<div class="mt-2 ms-3">
+						<span class="kart-ismi"></span>
+					</div>
+					<div>
+						<i class="btn remove"><svg class="bi" style="fill: currentColor" width="20" height="20"><use xlink:href="#trash"></use></svg></i>
+					</div>
+				</div>
+				<div class="card-body">
+					<div class="kart-bilgisi d-none">
+						<div>
+							Kart: <span class="kart-no"></span>
+						</div>
+						<div>
+							Bakiye: <span class="bakiye"></span>
+						</div>
+						<div>
+							Bekleyen Yükleme: <span class="bekleyen"></span>
+						</div>
+						<div>
+							Son İşlem Tarihi: <span class="son-islem"></span>
+						</div>
+						<div>
+							Son Yükleme Tarihi: <span class="son-yukleme"></span>
+						</div>
+					</div>
+					<div class="d-flex justify-content-center yukleniyor">
+						<div class="spinner-border" style="width: 3rem; height: 3rem;" role="status">
+						  <span class="visually-hidden">Yükleniyor...</span>
+						</div>
+					</div>
+					<div class="hata-mesaji d-none">
+					</div>
+				</div>
+			</div>
+		</template>
+		
+		<header class="p-3 mb-3 border-bottom">
+			<div class="container">
+			  <div class="d-flex flex-wrap align-items-center justify-content-center justify-content-lg-start">
+				<ul class="nav col-12 col-lg-auto me-lg-auto mb-2 justify-content-center mb-md-0">
+					<li><a href="#" class="nav-link px-2 link-secondary">İzmirim Kart Bakiye Sorgulama</a></li>
+				</ul>
+				<div class="text-end">
+					<button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#card-modal" aria-label="Kart Ekle">Kart Ekle</button>
+				</div>
+			  </div>
+			</div>
+		</header>
+		
+		<main>
+			<div class="modal fade" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-hidden="true" id="card-modal">
+				<div class="modal-dialog modal-dialog-centered">
+				  <div class="modal-content">
+					<form onsubmit="event.preventDefault();cardStorage.addFrom(this)">
+						<div class="modal-header">
+						<h1 class="modal-title fs-5">Kart Bilgileri</h1>
+						<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+						</div>
+						<div class="modal-body">
+							<div class="input-group mb-3">
+								<span class="input-group-text">Kart İsmi</span>
+								<input type="text" class="form-control" id="name" autocomplete="off" minlength="3" required>
+							</div>
+							<div class="input-group mb-3">
+								<span class="input-group-text">Kart Numarası</span>
+								<input type="text" class="form-control" id="cardno" autocomplete="off" maxlength="13" inputmode="numeric" pattern="[0-9]{5}-[0-9]{5}-[0-9]" title="00000-00000-0" required>
+							</div>
+							<div class="modal-mesaj">
+							</div>
+						</div>
+						<div class="modal-footer">
+						<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Kapat</button>
+						<button type="submit" class="btn btn-primary">Ekle</button>
+						</div>
+					</form>
+				  </div>
+				</div>
+			</div>
+							
+			<div class="container">
+				<div class="row" id="no-result">
+					Herhangi bir kart bilgisi bulunamadı. Lütfen "Kart Ekle" butonuna tıklayarak yeni bir kart ekleyin.
+				</div>
+				<div class="row" id="result">
+				</div>
+			</div>
+		</main>
+		
+		<footer class="border-top mt-3">
+			<div class="container mt-1">
+				<div class="d-flex flex-wrap justify-content-between align-items-center">
+					<div class="col-md-4 d-flex align-items-center">
+						<span class="mb-3 mb-md-0 text-body-secondary">&copy; 2023</span>
+					</div>
+					<ul class="nav col-md-4 justify-content-end list-unstyled d-flex">
+						<li class="ms-3">
+							<a class="text-body-secondary" href="mailto:atilla.acar@outlook.com" title="Atilla Acar">
+								<svg class="bi" style="fill: currentColor" width="24" height="24"><use xlink:href="#mail"></use></svg>
+							</a>
+						</li>
+						<li class="ms-3">
+							<a class="text-body-secondary" href="https://www.twitter.com/all1ta" title="Atilla Acar">
+								<svg class="bi" style="fill: currentColor" width="24" height="24"><use xlink:href="#twitter"></use></svg>
+							</a>
+						</li>
+						<li class="ms-3">
+							<a class="text-body-secondary" href="https://www.github.com/all1ta" title="Atilla Acar">
+								<svg class="bi" style="fill: currentColor" width="24" height="24"><use xlink:href="#github"></use></svg>
+							</a>
+						</li>
+					</ul>
+				</div>
+			</div>
+		</footer>
+		
+		<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL" crossorigin="anonymous"></script>
+	</body>
+</html>
